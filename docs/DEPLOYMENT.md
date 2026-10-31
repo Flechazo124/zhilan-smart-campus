@@ -29,7 +29,7 @@ pnpm start
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
 | `PORT` | 否 | 服务端口，默认 `5175` |
-| `SESSION_DAYS` | 否 | 会话有效天数，服务端限制为 `1-30` |
+| `SESSION_IDLE_MINUTES` | 否 | 无操作登录有效期，默认 `20` 分钟，服务端限制为 `1-120` |
 | `TEACHER_INVITE_CODE` | 生产必填 | 教师注册邀请码，必须替换默认值 |
 | `DATABASE_PATH` | 生产必填 | SQLite 持久化文件路径 |
 | `AI_API_KEY` | 否 | OpenAI-compatible 服务密钥，不配置时使用本地教学引擎 |
@@ -42,7 +42,7 @@ pnpm start
 
 ```dotenv
 PORT=5175
-SESSION_DAYS=7
+SESSION_IDLE_MINUTES=20
 TEACHER_INVITE_CODE=replace-with-a-strong-random-value
 DATABASE_PATH=/var/lib/zhilan/zhilan.db
 AI_API_KEY=

@@ -29,7 +29,7 @@ if (existsSync(envPath)) {
 
 export const config = {
   port: Number(process.env.PORT || 5175),
-  sessionDays: Math.max(1, Math.min(30, Number(process.env.SESSION_DAYS || 7))),
+  sessionIdleMinutes: Math.max(1, Math.min(120, Number(process.env.SESSION_IDLE_MINUTES || 20))),
   teacherInviteCode: process.env.TEACHER_INVITE_CODE || "ZHILAN-TEACHER-2026",
   devOrigins: new Set([
     "http://127.0.0.1:5174",

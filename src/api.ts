@@ -27,10 +27,73 @@ export class ApiError extends Error {
   }
 }
 
-let sessionToken: string | null = null;
+const sessionTokenKey = "zhilan.auth.token";
+const sessionActivityKey = "zhilan.auth.lastActivity";
+export const SESSION_ACTIVITY_EVENT = "zhilan-session-activity";
+export const SESSION_IDLE_TIMEOUT_MS = 20 * 60 * 1000;
+
+function readSessionCache() {
+  if (typeof window === "undefined") return { token: null, lastActivity: 0 };
+  try {
+    const token = window.sessionStorage.getItem(sessionTokenKey);
+    const lastActivity = Number(window.sessionStorage.getItem(sessionActivityKey) || 0);
+    if (!token || !Number.isFinite(lastActivity) || Date.now() - lastActivity >= SESSION_IDLE_TIMEOUT_MS) {
+      window.sessionStorage.removeItem(sessionTokenKey);
+      window.sessionStorage.removeItem(sessionActivityKey);
+      return { token: null, lastActivity: 0 };
+    }
+    return { token, lastActivity };
+  } catch {
+    return { token: null, lastActivity: 0 };
+  }
+}
+
+const cachedSession = readSessionCache();
+let sessionToken: string | null = cachedSession.token;
+let lastSessionActivity = cachedSession.lastActivity;
+
+export function touchSession() {
+  if (!sessionToken || typeof window === "undefined") return;
+  lastSessionActivity = Date.now();
+  try {
+    window.sessionStorage.setItem(sessionActivityKey, String(lastSessionActivity));
+  } catch {
+    // The in-memory token still works when storage is unavailable.
+  }
+  window.dispatchEvent(new Event(SESSION_ACTIVITY_EVENT));
+}
+
+export function hasCachedSession() {
+  return Boolean(sessionToken) && Date.now() - lastSessionActivity < SESSION_IDLE_TIMEOUT_MS;
+}
+
+export function sessionRemainingMs() {
+  if (!sessionToken) return 0;
+  return Math.max(0, SESSION_IDLE_TIMEOUT_MS - (Date.now() - lastSessionActivity));
+}
+
+export function clearSessionCache() {
+  sessionToken = null;
+  lastSessionActivity = 0;
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.removeItem(sessionTokenKey);
+    window.sessionStorage.removeItem(sessionActivityKey);
+  } catch {
+    // Ignore storage cleanup failures.
+  }
+}
 
 function saveSessionToken<T extends { token: string }>(payload: T): T {
   sessionToken = payload.token;
+  if (typeof window !== "undefined") {
+    try {
+      window.sessionStorage.setItem(sessionTokenKey, payload.token);
+    } catch {
+      // Keep the token in memory if session storage is unavailable.
+    }
+  }
+  touchSession();
   return payload;
 }
 
@@ -64,6 +127,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     }
     throw new ApiError(response.status, message);
   }
+  touchSession();
   if (response.status === 204) return undefined as T;
   return (await response.json()) as T;
 }
@@ -100,7 +164,7 @@ export const api = {
     try {
       return await request<{ ok: true }>("/api/auth/logout", { method: "POST" });
     } finally {
-      sessionToken = null;
+      clearSessionCache();
     }
   },
 

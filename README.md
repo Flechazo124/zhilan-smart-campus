@@ -102,7 +102,7 @@ AI_MODEL=gpt-4o-mini
 
 ```dotenv
 PORT=5175
-SESSION_DAYS=7
+SESSION_IDLE_MINUTES=20
 TEACHER_INVITE_CODE=replace-with-a-strong-invite-code
 DATABASE_PATH=/persistent-data/zhilan.db
 AI_API_KEY=

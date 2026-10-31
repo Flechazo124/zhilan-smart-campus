@@ -1171,7 +1171,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list[Flowable]:
                 [
                     ["变量", "默认值", "生产建议"],
                     ["PORT", "5175", "按平台端口配置"],
-                    ["SESSION_DAYS", "7", "1 至 30 天内按安全策略设置"],
+                    ["SESSION_IDLE_MINUTES", "20", "1 至 120 分钟内按安全策略设置"],
                     ["TEACHER_INVITE_CODE", "ZHILAN-TEACHER-2026", "必须替换为高强度随机值"],
                     ["DATABASE_PATH", "./data/zhilan.db", "使用持久盘绝对路径"],
                     ["AI_API_KEY", "空", "评审期可配置兼容服务密钥"],

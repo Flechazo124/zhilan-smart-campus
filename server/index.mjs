@@ -189,6 +189,7 @@ function checkOrigin(req) {
 function authenticate(req) {
   const token = requestSessionToken(req);
   if (!token) return null;
+  const tokenHash = hashToken(token);
   const user = db
     .prepare(`
       SELECT u.*, s.token_hash
@@ -196,7 +197,11 @@ function authenticate(req) {
       JOIN users u ON u.id = s.user_id
       WHERE s.token_hash = ? AND s.expires_at > ?
     `)
-    .get(hashToken(token), now());
+    .get(tokenHash, now());
+  if (user) {
+    const expiresAt = new Date(Date.now() + config.sessionIdleMinutes * 60 * 1000).toISOString();
+    db.prepare("UPDATE sessions SET expires_at = ? WHERE token_hash = ?").run(expiresAt, tokenHash);
+  }
   return user || null;
 }
 
@@ -214,7 +219,7 @@ function requireRole(user, ...roles) {
 
 function issueSession(req, res, user) {
   const token = createSessionToken();
-  const expires = new Date(Date.now() + config.sessionDays * 24 * 60 * 60 * 1000);
+  const expires = new Date(Date.now() + config.sessionIdleMinutes * 60 * 1000);
   db.prepare("INSERT INTO sessions (token_hash, user_id, created_at, expires_at) VALUES (?, ?, ?, ?)").run(
     hashToken(token),
     user.id,
@@ -1409,6 +1414,20 @@ async function handleApi(req, res, url) {
       INSERT INTO attendance_sessions (id, course_id, teacher_id, session_date, topic, check_in_code, status, opened_at, closes_at)
       VALUES (?, ?, ?, ?, ?, ?, 'open', ?, ?)
     `).run(id, course.id, user.id, new Date().toISOString().slice(0, 10), topic, code, now(), closesAt.toISOString());
+    const students = db.prepare("SELECT student_id FROM enrollments WHERE course_id = ?").all(course.id);
+    const notify = db.prepare(`
+      INSERT INTO notifications (id, user_id, title, content, kind, link_view, read_at, created_at)
+      VALUES (?, ?, ?, ?, 'attendance', 'attendance', NULL, ?)
+    `);
+    for (const student of students) {
+      notify.run(
+        createId("notification"),
+        student.student_id,
+        `签到已开始：${topic}`,
+        `${course.name} 已发起课堂签到，签到码 ${code}，请在 ${closesAt.toLocaleString("zh-CN")} 前完成。`,
+        now()
+      );
+    }
     publishCourseRealtime(course.id, {
       type: "attendance",
       action: "created",

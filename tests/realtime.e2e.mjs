@@ -159,6 +159,9 @@ try {
 
   await studentPage.getByText(assignmentTitle, { exact: true }).waitFor({ timeout: 10_000 });
   await studentPage.getByText(`实时收到新作业：${assignmentTitle}`, { exact: true }).waitFor();
+  await studentPage.getByRole("button", { name: /通知中心/ }).click();
+  await studentPage.getByText(`新作业：${assignmentTitle}`, { exact: true }).waitFor({ timeout: 10_000 });
+  await studentPage.getByRole("button", { name: "关闭通知", exact: true }).click();
   await screenshot(studentPage, "27-realtime-assignment-student.png");
 
   await studentPage.getByRole("button", { name: "考勤签到", exact: true }).click();
@@ -176,6 +179,9 @@ try {
   await teacherPage.getByText("课堂签到已开启，学生端会立即看到", { exact: true }).waitFor();
 
   await studentPage.getByText(attendanceTopic, { exact: true }).waitFor({ timeout: 10_000 });
+  await studentPage.getByRole("button", { name: /通知中心/ }).click();
+  await studentPage.getByText(`签到已开始：${attendanceTopic}`, { exact: true }).waitFor({ timeout: 10_000 });
+  await studentPage.getByRole("button", { name: "关闭通知", exact: true }).click();
   const sessionRow = teacherPage.locator(".teacher-attendance-list article").filter({ hasText: attendanceTopic });
   await sessionRow.getByRole("button", { name: "查看名单", exact: true }).click();
   const rosterDialog = teacherPage.getByRole("dialog");
@@ -195,7 +201,7 @@ try {
   await teacherPage.getByText("实时同步", { exact: true }).waitFor();
   await studentPage.getByText("实时同步", { exact: true }).waitFor();
   assert.equal(browserErrors.length, 0, `浏览器控制台错误：\n${browserErrors.join("\n")}`);
-  console.log(`实时 E2E 通过：作业发布和学生签到均实现跨会话自动更新；截图已保存到 ${screenshotDir}`);
+  console.log(`实时 E2E 通过：作业与签到均实时进入通知中心，双标签页身份保持隔离；截图已保存到 ${screenshotDir}`);
 } finally {
   if (browser) await browser.close();
   if (devServer.exitCode == null) {

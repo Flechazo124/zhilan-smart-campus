@@ -1,5 +1,6 @@
-import { useCallback, useRef, useState } from "react";
-import { api, ApiError } from "./api";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { GraduationCap, LoaderCircle } from "lucide-react";
+import { api, ApiError, SESSION_ACTIVITY_EVENT, clearSessionCache, hasCachedSession, sessionRemainingMs, touchSession } from "./api";
 import AppShell from "./components/AppShell";
 import AuthPage from "./components/AuthPage";
 import { ToastStack } from "./components/ui";
@@ -18,6 +19,7 @@ export default function App() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [view, setView] = useState<ViewName>("dashboard");
   const [courseId, setCourseId] = useState<string | undefined>();
+  const [authLoading, setAuthLoading] = useState(true);
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [toasts, setToasts] = useState<ToastState[]>([]);
   const toastId = useRef(0);
@@ -45,6 +47,7 @@ export default function App() {
       setDashboard(next);
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
+        clearSessionCache();
         setUser(null);
         setDashboard(null);
         notify("登录状态已失效，请重新登录", "error");
@@ -83,6 +86,81 @@ export default function App() {
 
   const { realtimeVersion, realtimeConnected } = useRealtime(user, handleRealtimeEvent);
 
+  useEffect(() => {
+    let cancelled = false;
+    const restore = async () => {
+      if (!hasCachedSession()) {
+        setAuthLoading(false);
+        return;
+      }
+      try {
+        const session = await api.me();
+        if (cancelled) return;
+        setUser(session.user);
+        const nextDashboard = await api.dashboard();
+        if (!cancelled) setDashboard(nextDashboard);
+      } catch (error) {
+        if (cancelled) return;
+        clearSessionCache();
+        setUser(null);
+        setDashboard(null);
+        if (!(error instanceof ApiError && error.status === 401)) {
+          notify("登录缓存恢复失败，请重新登录", "error");
+        }
+      } finally {
+        if (!cancelled) setAuthLoading(false);
+      }
+    };
+    void restore();
+    return () => {
+      cancelled = true;
+    };
+  }, [notify]);
+
+  useEffect(() => {
+    if (!user) return;
+    let timer: number | undefined;
+    const expire = () => {
+      clearSessionCache();
+      setUser(null);
+      setDashboard(null);
+      setView("dashboard");
+      setCourseId(undefined);
+      notify("登录已超过 20 分钟未操作，请重新登录", "error");
+    };
+    const schedule = () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+      const remaining = sessionRemainingMs();
+      if (remaining <= 0) {
+        expire();
+        return;
+      }
+      timer = window.setTimeout(expire, remaining);
+    };
+    const recordActivity = () => {
+      touchSession();
+      schedule();
+    };
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") schedule();
+    };
+    const activityEvents = ["pointerdown", "keydown", "wheel", "touchstart", "scroll"];
+    for (const eventName of activityEvents) {
+      window.addEventListener(eventName, recordActivity, { passive: true });
+    }
+    window.addEventListener(SESSION_ACTIVITY_EVENT, schedule);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+    schedule();
+    return () => {
+      if (timer !== undefined) window.clearTimeout(timer);
+      for (const eventName of activityEvents) {
+        window.removeEventListener(eventName, recordActivity);
+      }
+      window.removeEventListener(SESSION_ACTIVITY_EVENT, schedule);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [notify, user?.id]);
+
   const handleAuthenticated = async (nextUser: User) => {
     setUser(nextUser);
     setView("dashboard");
@@ -115,6 +193,17 @@ export default function App() {
     setCourseId(options?.courseId);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
+
+  if (authLoading) {
+    return (
+      <main className="boot-screen">
+        <span className="brand-mark"><GraduationCap size={28} /></span>
+        <h1>知澜智慧校园</h1>
+        <p>正在恢复 20 分钟登录缓存</p>
+        <LoaderCircle className="spin" size={22} />
+      </main>
+    );
+  }
 
   if (!user) {
     return (
