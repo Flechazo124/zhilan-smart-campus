@@ -27,8 +27,24 @@ export class ApiError extends Error {
   }
 }
 
+let sessionToken: string | null = null;
+
+function saveSessionToken<T extends { token: string }>(payload: T): T {
+  sessionToken = payload.token;
+  return payload;
+}
+
+export function realtimeUrl(path: string): string {
+  if (!sessionToken) return path;
+  const separator = path.includes("?") ? "&" : "?";
+  return `${path}${separator}token=${encodeURIComponent(sessionToken)}`;
+}
+
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
+  if (sessionToken) {
+    headers.set("Authorization", `Bearer ${sessionToken}`);
+  }
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
@@ -53,13 +69,16 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 }
 
 export const api = {
-  login: (payload: { identifier: string; password: string; role: Role }) =>
-    request<{ user: User }>("/api/auth/login", {
+  login: async (payload: { identifier: string; password: string; role: Role }) => {
+    sessionToken = null;
+    const result = await request<{ user: User; token: string }>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify(payload)
-    }),
+    });
+    return saveSessionToken(result);
+  },
 
-  register: (payload: {
+  register: async (payload: {
     role: Role;
     identifier: string;
     name: string;
@@ -68,13 +87,22 @@ export const api = {
     department: string;
     className?: string;
     inviteCode?: string;
-  }) =>
-    request<{ user: User }>("/api/auth/register", {
+  }) => {
+    sessionToken = null;
+    const result = await request<{ user: User; token: string }>("/api/auth/register", {
       method: "POST",
       body: JSON.stringify(payload)
-    }),
+    });
+    return saveSessionToken(result);
+  },
 
-  logout: () => request<{ ok: true }>("/api/auth/logout", { method: "POST" }),
+  logout: async () => {
+    try {
+      return await request<{ ok: true }>("/api/auth/logout", { method: "POST" });
+    } finally {
+      sessionToken = null;
+    }
+  },
 
   me: () => request<{ user: User; ai: AIStatus }>("/api/auth/me"),
 
@@ -245,15 +273,19 @@ export const api = {
       body: JSON.stringify(payload)
     }),
 
-  changePassword: (currentPassword: string, newPassword: string) =>
-    request<{ ok: true }>("/api/profile/password", {
+  changePassword: async (currentPassword: string, newPassword: string) => {
+    const result = await request<{ ok: true; token: string }>("/api/profile/password", {
       method: "POST",
       body: JSON.stringify({ currentPassword, newPassword })
-    })
+    });
+    return saveSessionToken(result);
+  }
 };
 
 export async function downloadFile(path: string, filename: string): Promise<void> {
-  const response = await fetch(path, { credentials: "include" });
+  const headers = new Headers();
+  if (sessionToken) headers.set("Authorization", `Bearer ${sessionToken}`);
+  const response = await fetch(path, { credentials: "include", headers });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };
     throw new ApiError(response.status, payload.error || "下载失败");

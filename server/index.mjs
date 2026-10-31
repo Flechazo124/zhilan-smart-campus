@@ -147,6 +147,25 @@ function parseCookies(req) {
   return cookies;
 }
 
+function bearerToken(req) {
+  const authorization = String(req.headers.authorization || "");
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : null;
+}
+
+function queryToken(req) {
+  try {
+    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+    return url.searchParams.get("token");
+  } catch {
+    return null;
+  }
+}
+
+function requestSessionToken(req) {
+  return bearerToken(req) || queryToken(req) || parseCookies(req)[sessionCookie] || null;
+}
+
 function clientIp(req) {
   return String(req.headers["x-forwarded-for"] || req.socket.remoteAddress || "unknown").split(",")[0].trim();
 }
@@ -168,7 +187,7 @@ function checkOrigin(req) {
 }
 
 function authenticate(req) {
-  const token = parseCookies(req)[sessionCookie];
+  const token = requestSessionToken(req);
   if (!token) return null;
   const user = db
     .prepare(`
@@ -203,11 +222,14 @@ function issueSession(req, res, user) {
     expires.toISOString()
   );
   const secure = String(req.headers["x-forwarded-proto"] || "").includes("https") ? "; Secure" : "";
-  return `${sessionCookie}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${secure}`;
+  return {
+    token,
+    cookie: `${sessionCookie}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${secure}`
+  };
 }
 
 function clearSession(req, res) {
-  const token = parseCookies(req)[sessionCookie];
+  const token = requestSessionToken(req);
   if (token) {
     db.prepare("DELETE FROM sessions WHERE token_hash = ?").run(hashToken(token));
   }
@@ -867,8 +889,13 @@ async function handleApi(req, res, url) {
     if (!user || user.role !== role || !verifyPassword(password, user.password_hash)) {
       throw new HttpError(401, "账号、密码或身份不匹配");
     }
-    const cookie = issueSession(req, res, user);
-    return sendJson(res, 200, { user: getPublicUser(user) }, { "Set-Cookie": cookie });
+    const session = issueSession(req, res, user);
+    return sendJson(
+      res,
+      200,
+      { user: getPublicUser(user), token: session.token },
+      { "Set-Cookie": session.cookie }
+    );
   }
 
   if (method === "POST" && pathname === "/api/auth/register") {
@@ -906,8 +933,13 @@ async function handleApi(req, res, url) {
       now()
     );
     const user = db.prepare("SELECT * FROM users WHERE id = ?").get(id);
-    const cookie = issueSession(req, res, user);
-    return sendJson(res, 201, { user: getPublicUser(user) }, { "Set-Cookie": cookie });
+    const session = issueSession(req, res, user);
+    return sendJson(
+      res,
+      201,
+      { user: getPublicUser(user), token: session.token },
+      { "Set-Cookie": session.cookie }
+    );
   }
 
   if (method === "POST" && pathname === "/api/auth/logout") {
@@ -1629,8 +1661,13 @@ async function handleApi(req, res, url) {
     const nextPassword = validatePassword(body.newPassword);
     db.prepare("UPDATE users SET password_hash = ? WHERE id = ?").run(hashPassword(nextPassword), user.id);
     db.prepare("DELETE FROM sessions WHERE user_id = ?").run(user.id);
-    const cookie = issueSession(req, res, user);
-    return sendJson(res, 200, { ok: true }, { "Set-Cookie": cookie });
+    const session = issueSession(req, res, user);
+    return sendJson(
+      res,
+      200,
+      { ok: true, token: session.token },
+      { "Set-Cookie": session.cookie }
+    );
   }
 
   throw new HttpError(404, "接口不存在");

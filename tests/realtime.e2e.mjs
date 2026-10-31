@@ -113,18 +113,13 @@ try {
     args: ["--disable-gpu", "--no-first-run"]
   });
 
-  const teacherContext = await browser.newContext({
+  const context = await browser.newContext({
     viewport: { width: 1440, height: 1000 },
     locale: "zh-CN",
     timezoneId: "Asia/Shanghai"
   });
-  const studentContext = await browser.newContext({
-    viewport: { width: 1440, height: 1000 },
-    locale: "zh-CN",
-    timezoneId: "Asia/Shanghai"
-  });
-  const teacherPage = await teacherContext.newPage();
-  const studentPage = await studentContext.newPage();
+  const teacherPage = await context.newPage();
+  const studentPage = await context.newPage();
 
   for (const [label, page] of [["teacher", teacherPage], ["student", studentPage]]) {
     page.on("pageerror", (error) => browserErrors.push(`${label} pageerror: ${error.message}`));
@@ -144,6 +139,8 @@ try {
 
   await login(teacherPage, "teacher");
   await login(studentPage, "student");
+  await teacherPage.getByText("教师账号", { exact: true }).waitFor();
+  await studentPage.getByText("学生账号", { exact: true }).waitFor();
 
   await studentPage.getByRole("button", { name: "作业中心", exact: true }).click();
   await studentPage.getByRole("heading", { name: "作业中心", exact: true }).waitFor();

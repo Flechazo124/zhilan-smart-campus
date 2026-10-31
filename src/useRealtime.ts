@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { realtimeUrl } from "./api";
 import type { User } from "./types";
 
 export interface RealtimeEvent {
@@ -35,7 +36,7 @@ export function useRealtime(user: User | null, onEvent: (event: RealtimeEvent) =
       return;
     }
 
-    const source = new EventSource("/api/events");
+    const source = new EventSource(realtimeUrl("/api/events"));
     const handleUpdate = (message: MessageEvent<string>) => {
       try {
         const event = JSON.parse(message.data) as RealtimeEvent;
