@@ -34,7 +34,11 @@ async function waitForServer() {
 async function request(pathname, options = {}) {
   const headers = new Headers(options.headers);
   if (options.body && !headers.has("content-type")) headers.set("content-type", "application/json");
-  if (options.cookie) headers.set("cookie", options.cookie);
+  if (options.cookie) {
+    headers.set("cookie", options.cookie);
+    const role = options.cookie.match(/zhilan_session_(student|teacher)=/)?.[1];
+    if (role && !headers.has("x-zhilan-role")) headers.set("x-zhilan-role", role);
+  }
   const response = await fetch(`${baseUrl}${pathname}`, {
     method: options.method || "GET",
     headers,
@@ -53,7 +57,7 @@ async function login(identifier, password, role) {
     body: { identifier, password, role }
   });
   assert.equal(result.response.status, 200, `登录失败：${JSON.stringify(result.payload)}`);
-  const cookie = result.response.headers.get("set-cookie")?.match(/zhilan_session=([^;]+)/)?.[0];
+  const cookie = result.response.headers.get("set-cookie")?.match(/zhilan_session_(?:student|teacher)=[^;]+/)?.[0];
   assert.ok(cookie, "登录响应应写入会话 Cookie");
   return cookie;
 }

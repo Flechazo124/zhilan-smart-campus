@@ -27,86 +27,149 @@ export class ApiError extends Error {
   }
 }
 
-const sessionTokenKey = "zhilan.auth.token";
-const sessionActivityKey = "zhilan.auth.lastActivity";
+const sessionVaultKey = "zhilan.auth.vault";
+const sessionTabRoleKey = "zhilan.auth.tabRole";
+export const SESSION_VAULT_STORAGE_KEY = sessionVaultKey;
 export const SESSION_ACTIVITY_EVENT = "zhilan-session-activity";
 export const SESSION_IDLE_TIMEOUT_MS = 20 * 60 * 1000;
 
-function readSessionCache() {
-  if (typeof window === "undefined") return { token: null, lastActivity: 0 };
+type SessionEntry = { lastActivity: number };
+type SessionVault = { activeRole: Role | null; sessions: Partial<Record<Role, SessionEntry>> };
+
+const emptyVault = (): SessionVault => ({ activeRole: null, sessions: {} });
+
+function readVault(): SessionVault {
+  if (typeof window === "undefined") return emptyVault();
   try {
-    const token = window.sessionStorage.getItem(sessionTokenKey);
-    const lastActivity = Number(window.sessionStorage.getItem(sessionActivityKey) || 0);
-    if (!token || !Number.isFinite(lastActivity) || Date.now() - lastActivity >= SESSION_IDLE_TIMEOUT_MS) {
-      window.sessionStorage.removeItem(sessionTokenKey);
-      window.sessionStorage.removeItem(sessionActivityKey);
-      return { token: null, lastActivity: 0 };
+    const payload = JSON.parse(window.localStorage.getItem(sessionVaultKey) || "null") as SessionVault | null;
+    if (!payload || typeof payload !== "object" || typeof payload.sessions !== "object") return emptyVault();
+    const sessions: SessionVault["sessions"] = {};
+    for (const role of ["student", "teacher"] as const) {
+      const candidate = (payload.sessions as Record<string, unknown>)[role];
+      if (!candidate || typeof candidate !== "object") continue;
+      const lastActivity = Number((candidate as { lastActivity?: unknown }).lastActivity);
+      if (Number.isFinite(lastActivity)) sessions[role] = { lastActivity };
     }
-    return { token, lastActivity };
+    return {
+      activeRole: payload.activeRole === "student" || payload.activeRole === "teacher" ? payload.activeRole : null,
+      sessions
+    };
   } catch {
-    return { token: null, lastActivity: 0 };
+    return emptyVault();
   }
 }
 
-const cachedSession = readSessionCache();
-let sessionToken: string | null = cachedSession.token;
-let lastSessionActivity = cachedSession.lastActivity;
-
-export function touchSession() {
-  if (!sessionToken || typeof window === "undefined") return;
-  lastSessionActivity = Date.now();
+function writeVault(vault: SessionVault) {
+  if (typeof window === "undefined") return;
   try {
-    window.sessionStorage.setItem(sessionActivityKey, String(lastSessionActivity));
+    window.localStorage.setItem(sessionVaultKey, JSON.stringify(vault));
   } catch {
-    // The in-memory token still works when storage is unavailable.
+    // The active role still works in memory when storage is unavailable.
+  }
+}
+
+function persistCurrentSession(activateRole: boolean) {
+  if (!activeSessionRole || typeof window === "undefined") return;
+  const vault = readVault();
+  if (activateRole) vault.activeRole = activeSessionRole;
+  vault.sessions[activeSessionRole] = { lastActivity: lastSessionActivity };
+  try {
+    writeVault(vault);
+    window.sessionStorage.setItem(sessionTabRoleKey, activeSessionRole);
+  } catch {
+    // The active role still works in memory when storage is unavailable.
   }
   window.dispatchEvent(new Event(SESSION_ACTIVITY_EVENT));
 }
 
+function readSessionCache() {
+  if (typeof window === "undefined") return { role: null, lastActivity: 0 };
+  try {
+    window.sessionStorage.removeItem("zhilan.auth.token");
+    window.sessionStorage.removeItem("zhilan.auth.lastActivity");
+    window.localStorage.removeItem("zhilan.auth.token");
+    const vault = readVault();
+    const storedTabRole = window.sessionStorage.getItem(sessionTabRoleKey);
+    const tabRole = storedTabRole === "student" || storedTabRole === "teacher" ? storedTabRole : null;
+    for (const role of ["student", "teacher"] as const) {
+      const entry = vault.sessions[role];
+      if (entry && (!Number.isFinite(entry.lastActivity) || Date.now() - entry.lastActivity >= SESSION_IDLE_TIMEOUT_MS)) {
+        delete vault.sessions[role];
+        if (vault.activeRole === role) vault.activeRole = null;
+      }
+    }
+    // Persist the sanitized vault so legacy token fields are removed immediately.
+    writeVault(vault);
+    const preferredRole = tabRole || vault.activeRole;
+    const entry = preferredRole ? vault.sessions[preferredRole] : null;
+    if (preferredRole && entry) {
+      return { role: preferredRole, lastActivity: entry.lastActivity };
+    }
+    return { role: null, lastActivity: 0 };
+  } catch {
+    return { role: null, lastActivity: 0 };
+  }
+}
+
+const cachedSession = readSessionCache();
+let activeSessionRole: Role | null = cachedSession.role;
+let lastSessionActivity = cachedSession.lastActivity;
+
+export function touchSession() {
+  if (!activeSessionRole || typeof window === "undefined") return;
+  lastSessionActivity = Date.now();
+  persistCurrentSession(false);
+}
+
 export function hasCachedSession() {
-  return Boolean(sessionToken) && Date.now() - lastSessionActivity < SESSION_IDLE_TIMEOUT_MS;
+  if (!activeSessionRole) return false;
+  const entry = readVault().sessions[activeSessionRole];
+  if (!entry) return false;
+  lastSessionActivity = entry.lastActivity;
+  return Date.now() - lastSessionActivity < SESSION_IDLE_TIMEOUT_MS;
 }
 
 export function sessionRemainingMs() {
-  if (!sessionToken) return 0;
+  if (!activeSessionRole) return 0;
+  const entry = readVault().sessions[activeSessionRole];
+  if (!entry) return 0;
+  lastSessionActivity = entry.lastActivity;
   return Math.max(0, SESSION_IDLE_TIMEOUT_MS - (Date.now() - lastSessionActivity));
 }
 
 export function clearSessionCache() {
-  sessionToken = null;
-  lastSessionActivity = 0;
-  if (typeof window === "undefined") return;
-  try {
-    window.sessionStorage.removeItem(sessionTokenKey);
-    window.sessionStorage.removeItem(sessionActivityKey);
-  } catch {
-    // Ignore storage cleanup failures.
-  }
-}
-
-function saveSessionToken<T extends { token: string }>(payload: T): T {
-  sessionToken = payload.token;
   if (typeof window !== "undefined") {
     try {
-      window.sessionStorage.setItem(sessionTokenKey, payload.token);
+      const vault = readVault();
+      if (activeSessionRole) delete vault.sessions[activeSessionRole];
+      if (vault.activeRole === activeSessionRole) vault.activeRole = null;
+      writeVault(vault);
+      window.sessionStorage.removeItem(sessionTabRoleKey);
     } catch {
-      // Keep the token in memory if session storage is unavailable.
+      // Ignore storage cleanup failures.
     }
   }
-  touchSession();
+  activeSessionRole = null;
+  lastSessionActivity = 0;
+}
+
+function saveSessionRole<T>(payload: T, role: Role): T {
+  activeSessionRole = role;
+  lastSessionActivity = Date.now();
+  persistCurrentSession(true);
   return payload;
 }
 
 export function realtimeUrl(path: string): string {
-  if (!sessionToken) return path;
+  if (!activeSessionRole) return path;
   const separator = path.includes("?") ? "&" : "?";
-  return `${path}${separator}token=${encodeURIComponent(sessionToken)}`;
+  return `${path}${separator}role=${encodeURIComponent(activeSessionRole)}`;
 }
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers);
-  if (sessionToken) {
-    headers.set("Authorization", `Bearer ${sessionToken}`);
+  if (activeSessionRole) {
+    headers.set("X-Zhilan-Role", activeSessionRole);
   }
   if (options.body && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
@@ -134,12 +197,12 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
 
 export const api = {
   login: async (payload: { identifier: string; password: string; role: Role }) => {
-    sessionToken = null;
-    const result = await request<{ user: User; token: string }>("/api/auth/login", {
+    activeSessionRole = null;
+    const result = await request<{ user: User }>("/api/auth/login", {
       method: "POST",
       body: JSON.stringify(payload)
     });
-    return saveSessionToken(result);
+    return saveSessionRole(result, payload.role);
   },
 
   register: async (payload: {
@@ -152,12 +215,12 @@ export const api = {
     className?: string;
     inviteCode?: string;
   }) => {
-    sessionToken = null;
-    const result = await request<{ user: User; token: string }>("/api/auth/register", {
+    activeSessionRole = null;
+    const result = await request<{ user: User }>("/api/auth/register", {
       method: "POST",
       body: JSON.stringify(payload)
     });
-    return saveSessionToken(result);
+    return saveSessionRole(result, payload.role);
   },
 
   logout: async () => {
@@ -338,17 +401,18 @@ export const api = {
     }),
 
   changePassword: async (currentPassword: string, newPassword: string) => {
-    const result = await request<{ ok: true; token: string }>("/api/profile/password", {
+    const result = await request<{ ok: true }>("/api/profile/password", {
       method: "POST",
       body: JSON.stringify({ currentPassword, newPassword })
     });
-    return saveSessionToken(result);
+    if (!activeSessionRole) throw new ApiError(401, "登录状态已失效，请重新登录");
+    return saveSessionRole(result, activeSessionRole);
   }
 };
 
 export async function downloadFile(path: string, filename: string): Promise<void> {
   const headers = new Headers();
-  if (sessionToken) headers.set("Authorization", `Bearer ${sessionToken}`);
+  if (activeSessionRole) headers.set("X-Zhilan-Role", activeSessionRole);
   const response = await fetch(path, { credentials: "include", headers });
   if (!response.ok) {
     const payload = (await response.json().catch(() => ({}))) as { error?: string };

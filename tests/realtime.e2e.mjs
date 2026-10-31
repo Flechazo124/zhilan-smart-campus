@@ -63,8 +63,8 @@ async function waitForService() {
   throw new Error("实时测试服务未能在预期时间内启动");
 }
 
-async function login(page, role) {
-  await page.goto(baseUrl, { waitUntil: "networkidle" });
+async function login(page, role, fresh = false) {
+  await page.goto(`${baseUrl}${fresh ? "?login=1" : ""}`, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "登录你的学习空间", exact: true }).waitFor();
   if (role === "teacher") {
     await page.getByRole("tab", { name: "教师" }).click();
@@ -138,9 +138,22 @@ try {
   }
 
   await login(teacherPage, "teacher");
-  await login(studentPage, "student");
+  await login(studentPage, "student", true);
   await teacherPage.getByText("教师账号", { exact: true }).waitFor();
   await studentPage.getByText("学生账号", { exact: true }).waitFor();
+  const roleCookies = await context.cookies(baseUrl);
+  const studentSessionCookie = roleCookies.find((cookie) => cookie.name === "zhilan_session_student");
+  const teacherSessionCookie = roleCookies.find((cookie) => cookie.name === "zhilan_session_teacher");
+  assert.ok(studentSessionCookie && teacherSessionCookie, "学生和教师应各自持有独立的角色 Cookie");
+  assert.ok(studentSessionCookie.httpOnly && teacherSessionCookie.httpOnly, "角色 Cookie 必须为 HttpOnly");
+  assert.equal(
+    await studentPage.evaluate(() => {
+      const vault = JSON.parse(localStorage.getItem("zhilan.auth.vault") || "null");
+      return Object.values(vault?.sessions || {}).some((entry) => entry && "token" in entry);
+    }),
+    false,
+    "浏览器存储不得包含会话 Token"
+  );
 
   await studentPage.getByRole("button", { name: "作业中心", exact: true }).click();
   await studentPage.getByRole("heading", { name: "作业中心", exact: true }).waitFor();
@@ -156,6 +169,14 @@ try {
     .fill("这是实时推送测试作业，发布后学生页面应当立即出现当前任务，无需手动刷新。");
   await assignmentDialog.getByRole("button", { name: "发布并通知学生", exact: true }).click();
   await teacherPage.getByText("作业已发布，学生已收到通知", { exact: true }).waitFor();
+  assert.equal(
+    await teacherPage.evaluate(() => {
+      const vault = JSON.parse(localStorage.getItem("zhilan.auth.vault") || "null");
+      return vault?.activeRole;
+    }),
+    "student",
+    "教师后台请求不能覆盖最近一次显式登录的学生角色"
+  );
 
   await studentPage.getByText(assignmentTitle, { exact: true }).waitFor({ timeout: 10_000 });
   await studentPage.getByText(`实时收到新作业：${assignmentTitle}`, { exact: true }).waitFor();
@@ -200,8 +221,24 @@ try {
 
   await teacherPage.getByText("实时同步", { exact: true }).waitFor();
   await studentPage.getByText("实时同步", { exact: true }).waitFor();
+
+  await studentPage.evaluate(() => {
+    const vault = JSON.parse(localStorage.getItem("zhilan.auth.vault") || "null");
+    vault.sessions.student.lastActivity = Date.now() - 20 * 60 * 1000 - 1000;
+    localStorage.setItem("zhilan.auth.vault", JSON.stringify(vault));
+  });
+  await studentPage.reload({ waitUntil: "networkidle" });
+  await studentPage.getByRole("heading", { name: "登录你的学习空间", exact: true }).waitFor();
+  assert.equal(
+    await studentPage.getByText("教师账号", { exact: true }).count(),
+    0,
+    "学生标签页凭证过期后不得回退到仍在有效的教师身份"
+  );
+
   assert.equal(browserErrors.length, 0, `浏览器控制台错误：\n${browserErrors.join("\n")}`);
-  console.log(`实时 E2E 通过：作业与签到均实时进入通知中心，双标签页身份保持隔离；截图已保存到 ${screenshotDir}`);
+  console.log(
+    `实时 E2E 通过：通知实时送达、默认角色稳定、跨角色过期隔离；截图已保存到 ${screenshotDir}`
+  );
 } finally {
   if (browser) await browser.close();
   if (devServer.exitCode == null) {

@@ -22,7 +22,8 @@ import { openRealtimeStream, publishRealtime } from "./realtime.mjs";
 const serverDir = path.dirname(fileURLToPath(import.meta.url));
 const projectRoot = path.resolve(serverDir, "..");
 const distDir = path.join(projectRoot, "dist");
-const sessionCookie = "zhilan_session";
+const sessionCookiePrefix = "zhilan_session_";
+const legacySessionCookie = "zhilan_session";
 const maxBodyBytes = 1_000_000;
 const loginAttempts = new Map();
 const loginRateLimitWindowMs = 5_000;
@@ -162,8 +163,33 @@ function queryToken(req) {
   }
 }
 
+function requestedRole(req) {
+  const headerRole = String(req.headers["x-zhilan-role"] || "").trim();
+  if (headerRole === "student" || headerRole === "teacher") return headerRole;
+  try {
+    const url = new URL(req.url || "/", `http://${req.headers.host || "localhost"}`);
+    const queryRole = url.searchParams.get("role");
+    return queryRole === "student" || queryRole === "teacher" ? queryRole : null;
+  } catch {
+    return null;
+  }
+}
+
+function isSecureRequest(req) {
+  return Boolean(req.socket.encrypted) || String(req.headers["x-forwarded-proto"] || "").includes("https");
+}
+
+function sessionCookieName(role, secure = false) {
+  return `${secure ? "__Host-" : ""}${sessionCookiePrefix}${role}`;
+}
+
 function requestSessionToken(req) {
-  return bearerToken(req) || queryToken(req) || parseCookies(req)[sessionCookie] || null;
+  const explicitToken = bearerToken(req) || queryToken(req);
+  if (explicitToken) return explicitToken;
+  const cookies = parseCookies(req);
+  const role = requestedRole(req);
+  const secure = isSecureRequest(req);
+  return role ? cookies[sessionCookieName(role, secure)] || null : cookies[legacySessionCookie] || null;
 }
 
 function clientIp(req) {
@@ -226,20 +252,28 @@ function issueSession(req, res, user) {
     now(),
     expires.toISOString()
   );
-  const secure = String(req.headers["x-forwarded-proto"] || "").includes("https") ? "; Secure" : "";
+  const secureRequest = isSecureRequest(req);
+  const secure = secureRequest ? "; Secure" : "";
+  const cookieName = sessionCookieName(user.role, secureRequest);
   return {
     token,
-    cookie: `${sessionCookie}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${secure}`
+    cookie: `${cookieName}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${secure}`
   };
 }
 
 function clearSession(req, res) {
   const token = requestSessionToken(req);
+  let role = requestedRole(req);
   if (token) {
+    const sessionUser = db
+      .prepare("SELECT u.role FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?")
+      .get(hashToken(token));
+    if (sessionUser?.role) role = role || sessionUser.role;
     db.prepare("DELETE FROM sessions WHERE token_hash = ?").run(hashToken(token));
   }
-  const secure = String(req.headers["x-forwarded-proto"] || "").includes("https") ? "; Secure" : "";
-  return `${sessionCookie}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
+  const secureRequest = isSecureRequest(req);
+  const secure = secureRequest ? "; Secure" : "";
+  return `${sessionCookieName(role || "student", secureRequest)}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0${secure}`;
 }
 
 function rateLimitLogin(req) {
@@ -898,7 +932,7 @@ async function handleApi(req, res, url) {
     return sendJson(
       res,
       200,
-      { user: getPublicUser(user), token: session.token },
+      { user: getPublicUser(user) },
       { "Set-Cookie": session.cookie }
     );
   }
@@ -942,7 +976,7 @@ async function handleApi(req, res, url) {
     return sendJson(
       res,
       201,
-      { user: getPublicUser(user), token: session.token },
+      { user: getPublicUser(user) },
       { "Set-Cookie": session.cookie }
     );
   }
@@ -1684,7 +1718,7 @@ async function handleApi(req, res, url) {
     return sendJson(
       res,
       200,
-      { ok: true, token: session.token },
+      { ok: true },
       { "Set-Cookie": session.cookie }
     );
   }

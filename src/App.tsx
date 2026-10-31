@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { GraduationCap, LoaderCircle } from "lucide-react";
-import { api, ApiError, SESSION_ACTIVITY_EVENT, clearSessionCache, hasCachedSession, sessionRemainingMs, touchSession } from "./api";
+import { api, ApiError, SESSION_ACTIVITY_EVENT, SESSION_VAULT_STORAGE_KEY, clearSessionCache, hasCachedSession, sessionRemainingMs, touchSession } from "./api";
 import AppShell from "./components/AppShell";
 import AuthPage from "./components/AuthPage";
 import { ToastStack } from "./components/ui";
@@ -89,6 +89,10 @@ export default function App() {
   useEffect(() => {
     let cancelled = false;
     const restore = async () => {
+      if (new URLSearchParams(window.location.search).get("login") === "1") {
+        setAuthLoading(false);
+        return;
+      }
       if (!hasCachedSession()) {
         setAuthLoading(false);
         return;
@@ -144,11 +148,15 @@ export default function App() {
     const onVisibilityChange = () => {
       if (document.visibilityState === "visible") schedule();
     };
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === SESSION_VAULT_STORAGE_KEY) schedule();
+    };
     const activityEvents = ["pointerdown", "keydown", "wheel", "touchstart", "scroll"];
     for (const eventName of activityEvents) {
       window.addEventListener(eventName, recordActivity, { passive: true });
     }
     window.addEventListener(SESSION_ACTIVITY_EVENT, schedule);
+    window.addEventListener("storage", onStorage);
     document.addEventListener("visibilitychange", onVisibilityChange);
     schedule();
     return () => {
@@ -157,11 +165,15 @@ export default function App() {
         window.removeEventListener(eventName, recordActivity);
       }
       window.removeEventListener(SESSION_ACTIVITY_EVENT, schedule);
+      window.removeEventListener("storage", onStorage);
       document.removeEventListener("visibilitychange", onVisibilityChange);
     };
   }, [notify, user?.id]);
 
   const handleAuthenticated = async (nextUser: User) => {
+    if (window.location.search) {
+      window.history.replaceState(null, "", window.location.pathname);
+    }
     setUser(nextUser);
     setView("dashboard");
     setCourseId(undefined);

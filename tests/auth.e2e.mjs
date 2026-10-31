@@ -193,17 +193,25 @@ try {
   await page.getByRole("button", { name: "进入学习空间", exact: true }).click();
   await page.locator(".main-nav").waitFor();
   await page.getByText("浏览器测试学生", { exact: true }).first().waitFor();
-  const sessionCookie = (await context.cookies(baseUrl)).find((cookie) => cookie.name === "zhilan_session");
-  assert.ok(sessionCookie, "登录后应签发会话 Cookie");
+  const sessionCookie = (await context.cookies(baseUrl)).find((cookie) => cookie.name === "zhilan_session_student");
+  assert.ok(sessionCookie, "学生登录后应签发学生角色会话 Cookie");
+  assert.equal(sessionCookie.httpOnly, true, "会话 Cookie 必须为 HttpOnly");
   assert.equal(sessionCookie.expires, -1, "登录 Cookie 必须是浏览器会话 Cookie");
-  assert.ok(await page.evaluate(() => sessionStorage.getItem("zhilan.auth.token")), "登录后应缓存当前标签页 Token");
+  assert.equal(
+    await page.evaluate(() => {
+      const vault = JSON.parse(localStorage.getItem("zhilan.auth.vault") || "null");
+      return vault?.sessions?.student?.token || null;
+    }),
+    null,
+    "浏览器存储不得保存会话 Token"
+  );
   await screenshot(page, "26-auth-student-relogin.png");
 
   const revisitPage = await context.newPage();
   revisitPage.on("pageerror", (error) => browserErrors.push(`revisit pageerror: ${error.message}`));
   await revisitPage.goto(baseUrl, { waitUntil: "networkidle" });
-  await revisitPage.getByRole("heading", { name: "登录你的学习空间", exact: true }).waitFor();
-  assert.equal(await revisitPage.locator(".main-nav").count(), 0, "新标签页不得自动恢复登录");
+  await revisitPage.locator(".main-nav").waitFor();
+  await revisitPage.getByText("浏览器测试学生", { exact: true }).first().waitFor();
   await revisitPage.close();
 
   await page.reload({ waitUntil: "networkidle" });
@@ -211,14 +219,16 @@ try {
   await page.getByText("浏览器测试学生", { exact: true }).first().waitFor();
 
   await page.evaluate(() => {
-    sessionStorage.setItem("zhilan.auth.lastActivity", String(Date.now() - 20 * 60 * 1000 - 1000));
+    const vault = JSON.parse(localStorage.getItem("zhilan.auth.vault") || "null");
+    vault.sessions.student.lastActivity = Date.now() - 20 * 60 * 1000 - 1000;
+    localStorage.setItem("zhilan.auth.vault", JSON.stringify(vault));
   });
   await page.reload({ waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "登录你的学习空间", exact: true }).waitFor();
   assert.equal(await page.locator(".main-nav").count(), 0, "登录缓存超过 20 分钟后必须重新登录");
 
   assert.equal(browserErrors.length, 0, `浏览器控制台错误：\n${browserErrors.join("\n")}`);
-  console.log(`认证 E2E 通过：注册、校验、重复账号、新标签页隔离和 20 分钟登录缓存均通过；截图已保存到 ${screenshotDir}`);
+  console.log(`认证 E2E 通过：注册、校验、重复账号、跨窗口登录缓存和 20 分钟过期均通过；截图已保存到 ${screenshotDir}`);
 } finally {
   if (browser) await browser.close();
   if (devServer.exitCode == null) {
