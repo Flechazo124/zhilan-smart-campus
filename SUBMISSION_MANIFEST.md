@@ -57,7 +57,7 @@ pnpm build
 pnpm start
 ```
 
-访问公网演示地址 `http://weigxh.cn:5555`。
+访问 `http://127.0.0.1:5175`。
 
 ## 技术文档
 
