@@ -1,0 +1,37 @@
+{
+  "name": "zhilan-smart-campus",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "description": "知澜智慧校园 - AI 驱动的学生与教师一体化学习平台",
+  "packageManager": "pnpm@11.19.0",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "dev:web": "vite --host 127.0.0.1",
+    "dev:server": "node server/index.mjs",
+    "build": "tsc -b && vite build",
+    "start": "node server/index.mjs",
+    "seed": "node server/seed.mjs",
+    "test:api": "node --test tests/api.test.mjs",
+    "test:auth": "node tests/auth.e2e.mjs",
+    "test:realtime": "node tests/realtime.e2e.mjs",
+    "test:e2e": "node tests/e2e.mjs",
+    "test:all": "pnpm test:api && pnpm test:e2e && pnpm test:auth && pnpm test:realtime"
+  },
+  "dependencies": {
+    "lucide-react": "0.468.0",
+    "react": "18.3.1",
+    "react-dom": "18.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.18",
+    "@types/react-dom": "18.3.5",
+    "@vitejs/plugin-react": "4.3.4",
+    "playwright-core": "1.62.1",
+    "typescript": "5.7.2",
+    "vite": "5.4.14"
+  },
+  "engines": {
+    "node": ">=22.13.0"
+  }
+}
