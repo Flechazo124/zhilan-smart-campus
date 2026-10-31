@@ -14,6 +14,7 @@
 - 项目 README、环境变量模板、技术架构、部署说明、团队分工、比赛提交稿和视频脚本。
 - 19 页 PDF 技术文档，覆盖项目概述、需求分析、系统架构、AI 方案、核心实现、测试部署、创新点和展望。
 - 公开 GitHub 仓库：`https://github.com/Flechazo124/zhilan-smart-campus`。
+- 公网演示地址：`http://weigxh.cn:5555`。
 - 团队信息：微光胡闹队，北华航天工业学院，成员袁正、胡开元、屈轶宸，指导教师牛静。
 
 提交包不包含：
@@ -56,13 +57,13 @@ pnpm build
 pnpm start
 ```
 
-访问 `http://127.0.0.1:5175`。
+访问公网演示地址 `http://weigxh.cn:5555`。
 
 ## 技术文档
 
 - 文件：`artifacts/submission/知澜智慧校园-技术文档.pdf`
 - 页数：19 页，不超过比赛要求的 30 页。
-- SHA-256：`0D5102803E9752B6A167D93762846F2F91E29F8CC86BBBFD2570A3636D6DB825`
+- SHA-256：`D2669F427EBC28EC5764D7D4D43998B3E7C914C61E274EC4C56A4DEB3BE86D87`
 - 校验：已完成文字提取、乱码检查、页数检查和逐页视觉检查。
 - 生成脚本：`scripts/build-technical-document.py`，可重复构建。
 
@@ -73,7 +74,7 @@ pnpm start
 
 ## 提交前必须由参赛者补充
 
-- 公网 HTTPS 演示地址。
+- 公网 HTTPS 演示地址（当前公开入口为 `http://weigxh.cn:5555`，正式评审前建议启用 HTTPS）。
 - 长期有效的网盘链接和提取码。
 - 作品讲解视频公开链接。
 - 评审期可用的 `AI_API_KEY`、`AI_BASE_URL` 和 `AI_MODEL`。

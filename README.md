@@ -9,6 +9,7 @@
 | 材料 | 位置 | 状态 |
 | --- | --- | --- |
 | 源代码与 Git 仓库 | https://github.com/Flechazo124/zhilan-smart-campus | 已公开 |
+| 在线演示 | http://weigxh.cn:5555 | 已上线 |
 | 项目介绍、技术架构、安装指南 | `README.md` | 已完成 |
 | 环境变量模板 | `.env.example` | 已完成 |
 | 依赖清单与锁文件 | `package.json`、`pnpm-lock.yaml` | 已完成 |
@@ -63,7 +64,7 @@ pnpm dev
 
 - 一个命令同时启动前端开发服务与后端 API。
 - 前端开发地址：`http://127.0.0.1:5174`
-- 后端 API：`http://127.0.0.1:5175`
+- 本地 API 端口：`5175`
 
 生产模式只需构建后启动统一服务：
 
@@ -72,7 +73,7 @@ pnpm build
 pnpm start
 ```
 
-生产地址：`http://127.0.0.1:5175`
+在线演示地址：`http://weigxh.cn:5555`
 
 ## 演示账号
 
@@ -193,6 +194,8 @@ pnpm test:all
 
 公开仓库：https://github.com/Flechazo124/zhilan-smart-campus
 
+在线演示：http://weigxh.cn:5555
+
 详细的团队角色说明见 [docs/TEAM.md](docs/TEAM.md)。
 
 ## 项目结构
@@ -236,6 +239,6 @@ zhilan-smart-campus/
 - 当前作业提交为文本形式，不包含附件上传和对象存储。
 - 当前 AI 助手不执行工具调用，不自动修改成绩或教务数据，只提供教学建议。
 - SQLite 适合单实例比赛演示和中小规模试点；多实例高并发部署应迁移到 PostgreSQL。
-- 网盘链接、公网域名、API Key 和演示视频链接需要参赛者在提交前按实际部署填写。
+- 网盘链接、API Key 和演示视频链接需要参赛者在提交前按实际部署填写。
 
 更完整的评审映射、商业与运营说明见 [docs/COMPETITION_SUBMISSION.md](docs/COMPETITION_SUBMISSION.md)，技术设计见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，部署说明见 [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)，提交核验见 [docs/SUBMISSION_CHECKLIST.md](docs/SUBMISSION_CHECKLIST.md)，视频脚本见 [docs/DEMO_SCRIPT.md](docs/DEMO_SCRIPT.md)。
