@@ -137,6 +137,10 @@ try {
 
   await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("heading", { name: "登录你的学习空间", exact: true }).waitFor();
+  assert.equal(await page.getByLabel("学号").inputValue(), "");
+  assert.equal(await page.getByLabel("密码", { exact: true }).inputValue(), "");
+  assert.equal(await page.getByLabel("学号").getAttribute("autocomplete"), "off");
+  assert.equal(await page.getByLabel("密码", { exact: true }).getAttribute("autocomplete"), "off");
   await screenshot(page, "20-auth-login.png");
 
   await page.getByRole("button", { name: "立即注册", exact: true }).click();
@@ -189,10 +193,24 @@ try {
   await page.getByRole("button", { name: "进入学习空间", exact: true }).click();
   await page.locator(".main-nav").waitFor();
   await page.getByText("浏览器测试学生", { exact: true }).first().waitFor();
+  const sessionCookie = (await context.cookies(baseUrl)).find((cookie) => cookie.name === "zhilan_session");
+  assert.ok(sessionCookie, "登录后应签发会话 Cookie");
+  assert.equal(sessionCookie.expires, -1, "登录 Cookie 必须是浏览器会话 Cookie");
   await screenshot(page, "26-auth-student-relogin.png");
 
+  const revisitPage = await context.newPage();
+  revisitPage.on("pageerror", (error) => browserErrors.push(`revisit pageerror: ${error.message}`));
+  await revisitPage.goto(baseUrl, { waitUntil: "networkidle" });
+  await revisitPage.getByRole("heading", { name: "登录你的学习空间", exact: true }).waitFor();
+  assert.equal(await revisitPage.locator(".main-nav").count(), 0, "新标签页不得自动恢复登录");
+  await revisitPage.close();
+
+  await page.reload({ waitUntil: "networkidle" });
+  await page.getByRole("heading", { name: "登录你的学习空间", exact: true }).waitFor();
+  assert.equal(await page.locator(".main-nav").count(), 0, "刷新访问必须重新登录");
+
   assert.equal(browserErrors.length, 0, `浏览器控制台错误：\n${browserErrors.join("\n")}`);
-  console.log(`认证 E2E 通过：真实注册、校验、重复账号和重新登录均通过；截图已保存到 ${screenshotDir}`);
+  console.log(`认证 E2E 通过：真实注册、校验、重复账号、重新登录以及每次访问重新验证均通过；截图已保存到 ${screenshotDir}`);
 } finally {
   if (browser) await browser.close();
   if (devServer.exitCode == null) {

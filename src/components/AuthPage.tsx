@@ -25,6 +25,7 @@ export default function AuthPage({ onAuthenticated }: { onAuthenticated: (user: 
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [autofillKey] = useState(() => Math.random().toString(36).slice(2));
   const [form, setForm] = useState({
     identifier: "",
     password: "",
@@ -140,7 +141,7 @@ export default function AuthPage({ onAuthenticated }: { onAuthenticated: (user: 
             </button>
           </div>
 
-          <form className="auth-form" onSubmit={submit}>
+          <form className="auth-form" onSubmit={submit} autoComplete="off">
             {mode === "register" && (
               <div className="form-row form-row-two">
                 <label>
@@ -176,10 +177,11 @@ export default function AuthPage({ onAuthenticated }: { onAuthenticated: (user: 
               <div className="input-shell">
                 <UserRound size={17} />
                 <input
+                  name={`${autofillKey}-${mode}-identifier`}
                   value={form.identifier}
                   onChange={(event) => setField("identifier", event.target.value)}
                   placeholder={role === "student" ? "例如 2024001" : "例如 T1001"}
-                  autoComplete="username"
+                  autoComplete={mode === "login" ? "off" : "username"}
                   required
                 />
               </div>
@@ -207,11 +209,12 @@ export default function AuthPage({ onAuthenticated }: { onAuthenticated: (user: 
               <div className="input-shell">
                 <LockKeyhole size={17} />
                 <input
+                  name={`${autofillKey}-${mode}-password`}
                   type={showPassword ? "text" : "password"}
                   value={form.password}
                   onChange={(event) => setField("password", event.target.value)}
                   placeholder="至少 8 位，包含字母和数字"
-                  autoComplete={mode === "login" ? "current-password" : "new-password"}
+                  autoComplete={mode === "login" ? "off" : "new-password"}
                   required
                 />
                 <button

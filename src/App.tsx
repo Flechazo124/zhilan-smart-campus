@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
-import { GraduationCap, LoaderCircle, RefreshCcw } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
 import { api, ApiError } from "./api";
 import AppShell from "./components/AppShell";
 import AuthPage from "./components/AuthPage";
@@ -19,9 +18,7 @@ export default function App() {
   const [dashboard, setDashboard] = useState<DashboardData | null>(null);
   const [view, setView] = useState<ViewName>("dashboard");
   const [courseId, setCourseId] = useState<string | undefined>();
-  const [authLoading, setAuthLoading] = useState(true);
   const [dashboardLoading, setDashboardLoading] = useState(false);
-  const [bootError, setBootError] = useState<string | null>(null);
   const [toasts, setToasts] = useState<ToastState[]>([]);
   const toastId = useRef(0);
 
@@ -86,33 +83,6 @@ export default function App() {
 
   const { realtimeVersion, realtimeConnected } = useRealtime(user, handleRealtimeEvent);
 
-  useEffect(() => {
-    let cancelled = false;
-    const restore = async () => {
-      try {
-        const session = await api.me();
-        if (cancelled) return;
-        setUser(session.user);
-        setBootError(null);
-        const nextDashboard = await api.dashboard();
-        if (!cancelled) setDashboard(nextDashboard);
-      } catch (error) {
-        if (cancelled) return;
-        if (error instanceof ApiError && error.status !== 401) {
-          setBootError(error.message);
-        }
-        setUser(null);
-        setDashboard(null);
-      } finally {
-        if (!cancelled) setAuthLoading(false);
-      }
-    };
-    void restore();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
-
   const handleAuthenticated = async (nextUser: User) => {
     setUser(nextUser);
     setView("dashboard");
@@ -121,7 +91,6 @@ export default function App() {
     try {
       const nextDashboard = await api.dashboard();
       setDashboard(nextDashboard);
-      setBootError(null);
     } catch (error) {
       notify(error instanceof ApiError ? error.message : "工作台加载失败", "error");
     } finally {
@@ -147,28 +116,9 @@ export default function App() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
 
-  if (authLoading) {
-    return (
-      <main className="boot-screen">
-        <span className="brand-mark"><GraduationCap size={28} /></span>
-        <h1>知澜智慧校园</h1>
-        <p>正在恢复安全会话与校园数据</p>
-        <LoaderCircle className="spin" size={22} />
-      </main>
-    );
-  }
-
   if (!user) {
     return (
       <>
-        {bootError && (
-          <div className="boot-warning" role="alert">
-            <span>{bootError}</span>
-            <button type="button" onClick={() => window.location.reload()}>
-              <RefreshCcw size={14} /> 重新连接
-            </button>
-          </div>
-        )}
         <AuthPage onAuthenticated={(nextUser) => void handleAuthenticated(nextUser)} />
         <ToastStack toasts={toasts} onDismiss={dismissToast} />
       </>

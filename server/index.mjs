@@ -203,8 +203,7 @@ function issueSession(req, res, user) {
     expires.toISOString()
   );
   const secure = String(req.headers["x-forwarded-proto"] || "").includes("https") ? "; Secure" : "";
-  const maxAge = Math.floor((expires.getTime() - Date.now()) / 1000);
-  return `${sessionCookie}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure}`;
+  return `${sessionCookie}=${encodeURIComponent(token)}; Path=/; HttpOnly; SameSite=Lax${secure}`;
 }
 
 function clearSession(req, res) {
