@@ -268,8 +268,8 @@ class SubmissionDocument(BaseDocTemplate):
             topMargin=22 * mm,
             bottomMargin=19 * mm,
             title="知澜智慧校园技术文档",
-            author="知澜团队",
-            subject="AI WEB 网页开发挑战赛技术文档",
+            author="微光胡闹队",
+            subject="传智杯 Web 网页开发赛技术文档",
         )
         self.styles_by_name = styles
         self.toc = TableOfContents()
@@ -345,7 +345,7 @@ class SubmissionDocument(BaseDocTemplate):
         canvas.drawCentredString(36.5 * mm, 24.7 * mm, "ZHILAN CAMPUS")
         canvas.setFillColor(WHITE)
         canvas.setFont(FONT_BOLD, 11)
-        canvas.drawString(22 * mm, height - 21 * mm, "AI WEB 网页开发挑战赛")
+        canvas.drawString(22 * mm, height - 21 * mm, "传智杯 Web 网页开发赛")
         canvas.setFont(FONT_NAME, 8.5)
         canvas.drawRightString(width - 22 * mm, height - 21 * mm, "作品技术文档")
         canvas.restoreState()
@@ -655,14 +655,18 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list[Flowable]:
     story.extend(
         [
             Spacer(1, 20 * mm),
-            p("AI WEB 网页开发挑战赛 | 技术文档", styles["cover_kicker"]),
+            p("传智杯 Web 网页开发赛 | 技术文档", styles["cover_kicker"]),
             p("知澜智慧校园", styles["cover_title"]),
             p("AI 驱动的学生与教师一体化学习平台", styles["cover_subtitle"]),
             Spacer(1, 18 * mm),
             Table(
                 [
                     [p("项目关键词", styles["cover_meta"]), p("智慧教育 / AI 助教 / 实时协作 / 学情分析", styles["cover_meta"])],
-                    [p("参赛团队", styles["cover_meta"]), p("知澜团队", styles["cover_meta"])],
+                    [p("参赛项目", styles["cover_meta"]), p("传智杯 Web 网页开发赛", styles["cover_meta"])],
+                    [p("参赛团队", styles["cover_meta"]), p("微光胡闹队", styles["cover_meta"])],
+                    [p("参赛学校", styles["cover_meta"]), p("北华航天工业学院", styles["cover_meta"])],
+                    [p("团队成员", styles["cover_meta"]), p("袁正、胡开元、屈轶宸", styles["cover_meta"])],
+                    [p("指导教师", styles["cover_meta"]), p("牛静", styles["cover_meta"])],
                     [p("文档版本", styles["cover_meta"]), p("V1.0 最终提交版", styles["cover_meta"])],
                     [p("完成日期", styles["cover_meta"]), p("2026 年 10 月", styles["cover_meta"])],
                     [p("运行形态", styles["cover_meta"]), p("React + Node.js + SQLite，单实例可部署", styles["cover_meta"])],
@@ -1113,7 +1117,7 @@ def build_story(styles: dict[str, ParagraphStyle]) -> list[Flowable]:
             Spacer(1, 8 * mm),
             note_box(
                 "提交结论",
-                "当前版本具备可运行、可操作、可持久化、可实时反馈和可自动化回归的比赛作品基础。外部公网仓库地址、实名团队成员、学校与指导教师信息需由参赛者按真实报名信息补齐。",
+                "当前版本具备可运行、可操作、可持久化、可实时反馈和可自动化回归的比赛作品基础。项目仓库已公开发布，团队信息已按参赛团队提供的内容填写；公网演示环境和最终演示视频链接需在部署完成后补充。",
                 styles,
                 tone="orange",
             ),
